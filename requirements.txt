@@ -1,5 +1,1 @@
-<<<<<<< HEAD
-=======
-pyyaml
->>>>>>> main
 pyfgtconflib
