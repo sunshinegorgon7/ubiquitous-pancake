@@ -22,12 +22,26 @@ def find_interface(cfg: Dict[str, Any], name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def check_dns(cfg: Dict[str, Any]) -> bool:
+def check_1_1(cfg: Dict[str, Any]) -> bool:
+    """Ensure DNS server is configured."""
     dns = cfg.get("system_dns", {})
     return bool(dns.get("primary") and dns.get("secondary"))
 
 
-def check_wan_management(cfg: Dict[str, Any]) -> bool:
+def check_1_2(cfg: Dict[str, Any]) -> bool:
+    """Ensure intra-zone traffic is not always allowed."""
+    zones = cfg.get("system_zone", [])
+    if not zones:
+        return False
+    for zone in zones:
+        for _name, props in zone.items():
+            if props.get("intrazone") != "deny":
+                return False
+    return True
+
+
+def check_1_3(cfg: Dict[str, Any]) -> bool:
+    """Disable all management related services on WAN port."""
     iface = find_interface(cfg, "port1")
     if not iface:
         return False
@@ -36,21 +50,21 @@ def check_wan_management(cfg: Dict[str, Any]) -> bool:
     return not disallowed.intersection(allowed)
 
 
-def check_timezone(cfg: Dict[str, Any]) -> bool:
+def check_2_1_3(cfg: Dict[str, Any]) -> bool:
+    """Ensure timezone is properly configured."""
     return bool(cfg.get("system_global", {}).get("timezone"))
 
 
-def check_hostname(cfg: Dict[str, Any]) -> bool:
+def check_2_1_5(cfg: Dict[str, Any]) -> bool:
+    """Ensure hostname is set."""
     hostname = cfg.get("system_global", {}).get("hostname", "")
     return bool(hostname and not hostname.lower().startswith("fortigate"))
 
 
-CHECKS: Dict[str, Callable[[Dict[str, Any]], bool]] = {
-    "1.1": check_dns,
-    "1.3": check_wan_management,
-    "2.1.3": check_timezone,
-    "2.1.5": check_hostname,
-}
+def get_check(check_id: str) -> Optional[Callable[[Dict[str, Any]], bool]]:
+    """Return the check function for a given CIS control ID."""
+    func_name = f"check_{check_id.replace('.', '_')}"
+    return globals().get(func_name)
 
 
 def main():
@@ -66,7 +80,7 @@ def main():
         title = item.get("title", "")
         check_id = title.split()[0]
         status = "NOT IMPLEMENTED"
-        func = CHECKS.get(check_id)
+        func = get_check(check_id)
         if func:
             try:
                 status = "PASS" if func(config) else "FAIL"
